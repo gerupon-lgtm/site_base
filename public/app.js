@@ -1,9 +1,9 @@
 // © 2026 SIKUMI LAB — SITE BASE
-import {VERSION,PROFILES,clone,read,readAll,save,seed,stateOf,hasNew,publishedNews,displayDate,dateInput,preparePublication,badgeIds,badgeLabels,badgeLength,customBadgeText,WORK_KEY,publicPart,workChanged,readWork,saveWork,prepareWork} from './model.js?v=20261004-19';
-import {CONDITIONS, CONDITIONS_REVISION} from './conditions.js?v=20261004-19';
-import {newsList,newsDetailShell,bindNewsDetails,closeNewsDetail} from './news-details.js?v=20261004-19';
-import {PAGE_IMAGE_SLOTS,BADGE_OPTIONS,CUSTOM_BADGE_LIMIT} from './site-config.js?v=20261004-19';
-import {attachReorder} from './reorder.js?v=20261004-19';
+import {VERSION,PROFILES,clone,read,readAll,save,seed,stateOf,hasNew,publishedNews,displayDate,dateInput,preparePublication,badgeIds,badgeLabels,badgeLength,customBadgeText,WORK_KEY,publicPart,workChanged,readWork,saveWork,prepareWork} from './model.js?v=20261004-20';
+import {CONDITIONS, CONDITIONS_REVISION} from './conditions.js?v=20261004-20';
+import {newsList,newsDetailShell,bindNewsDetails,closeNewsDetail} from './news-details.js?v=20261004-20';
+import {PAGE_IMAGE_SLOTS,BADGE_OPTIONS,CUSTOM_BADGE_LIMIT} from './site-config.js?v=20261004-20';
+import {attachReorder} from './reorder.js?v=20261004-20';
 const profile=new URLSearchParams(location.search).get('profile');
 const selected=Object.hasOwn(PROFILES,profile)?profile:'shop';
 const page=document.body.dataset.page;
@@ -11,6 +11,11 @@ let sampleHeaderHidden=sessionStorage.getItem('site-base-demo-bar-hidden')==='ye
 let published=read(selected),work=page==='admin'?readWork(selected):null;
 let content=clone(work?.draft||published),tab='items',editorDraft=null,entered=sessionStorage.getItem('site-base-demo-entered')==='yes';
 const app=document.querySelector('#app'),dialog=document.querySelector('#dialog');
+let dialogGuard=null,exitPrompt=null,afterWorkCommit=null,authorizedExit=false;
+const formBaselines=new WeakMap();
+function formValue(form){return JSON.stringify([...new FormData(form)].map(([k,v])=>[k,typeof v==='string'?v:v.name]));}
+function pendingForms(){return [...app.querySelectorAll('#basic-form,#days-form,.inquiry-form')].filter(f=>formBaselines.has(f)&&formBaselines.get(f)!==formValue(f));}
+function hasPending(){return Boolean(dialog.open&&dialogGuard?.dirty()||pendingForms().length||work&&workChanged(work.base,content));}
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const lines=v=>esc(String(v??'').replaceAll('\\n','\n'));
 const link=(file,hash='')=>`./${file}?profile=${selected}${hash}`;
@@ -24,7 +29,8 @@ function persist(next,message='このブラウザに保存しました。',immed
 function workingNotice(){const dirty=work&&workChanged(work.base,content);return `<section class="working-bar" aria-label="編集内容の確定"><div><strong>${dirty?'未反映の変更があります':'公開側と同じ内容です'}</strong><p class="small muted">編集や写真の変更は作業内容として保存します。最後の確定まで公開側は変わりません。</p></div><div class="actions"><button class="primary" id="work-review" ${dirty?'':'disabled'}>変更内容を確認</button><button id="work-discard" ${dirty?'':'disabled'}>未反映の変更を取り消す</button></div></section>`;}
 function reviewValue(field,value){if(value==null||value==='')return 'なし';if(['startAt','endAt','articleAt'].includes(field))return displayDate(value,true);if(field==='hidden')return value?'非表示':'表示';if(field==='published')return value?'公開する':'下書き';if(typeof value==='boolean')return value?'オン':'オフ';if(field==='newMode')return value==='manual'?'手動で外す':'設定日数で自動終了';return String(value);}
 function reviewGroup(title,kind,status,rows,photos='',id=''){
- return `<section class="review-group" data-review-kind="${esc(kind)}" data-review-id="${esc(id)}"><header><h3>${esc(title)}</h3><p class="small muted">${esc(status)}</p></header><table class="review-table"><colgroup><col class="review-field"><col><col></colgroup><thead><tr><th scope="col">項目</th><th scope="col">変更前</th><th scope="col">変更後</th></tr></thead><tbody>${rows.map(([label,before,after])=>`<tr><th scope="row">${esc(label)}</th><td>${lines(before)}</td><td>${lines(after)}</td></tr>`).join('')}</tbody></table>${photos}</section>`;
+ const added=status.includes(' · 追加');
+ return `<section class="review-group" data-review-kind="${esc(kind)}" data-review-id="${esc(id)}"><header><h3>${esc(title)}</h3><p class="small muted">${esc(status)}</p></header><dl class="compact-fields">${rows.filter(([label])=>!added||label!=='名称').map(([label,before,after])=>`<div><dt>${esc(label)}</dt><dd>${added?'':`<span class="review-before">${lines(before)}</span><span class="review-arrow" aria-label="から"> → </span>`}<strong>${lines(after)}</strong></dd></div>`).join('')}</dl>${photos}</section>`;
 }
 function groupedReview(base,snapshot,prepared){
  const groups=[];
@@ -38,9 +44,9 @@ function groupedReview(base,snapshot,prepared){
    if(old&&JSON.stringify(old)===JSON.stringify(item)&&(!reordered||oldIndex===index))continue;
    const rows=[];
    if(!old||reordered&&oldIndex!==index)rows.push(['表示順',old?`${oldIndex+1}番目`:'なし',`${index+1}番目`]);
-   for(const [field,title]of [['name','名称'],['price','価格'],['body','本文'],['hidden','表示状態'],['published','公開設定'],['startAt','公開日時'],['endAt','終了日時'],['newEnabled','NEW'],['newMode','NEWの消し方'],['featured','ピックアップ'],['kind','種類'],['articleAt','記事日付']])if(old?old[field]!==item[field]:item[field]!=null)rows.push([title,reviewValue(field,old?.[field]),reviewValue(field,item[field])]);
-   if(!old||old.image!==item.image)rows.push(['写真',old?.image?'写真あり':'写真なし',item.image?'写真あり':'写真なし（画像枠を省く）']);
-   if(!old||JSON.stringify([old.badges,old.customBadge,old.customBadgeEnabled])!==JSON.stringify([item.badges,item.customBadge,item.customBadgeEnabled]))rows.push(['バッジ',old?badgeLabels(old).join('・')||'なし':'なし',badgeLabels(item).join('・')||'なし']);
+   for(const [field,title]of [['name','名称'],['price','価格'],['body','本文'],['hidden','表示状態'],['published','公開設定'],['startAt','公開日時'],['endAt','終了日時'],['newEnabled','NEW'],['newMode','NEWの消し方'],['featured','ピックアップ'],['kind','種類'],['articleAt','記事日付']])if(old?old[field]!==item[field]:item[field]!=null&&item[field]!==''&&(field==='newMode'?item.newEnabled:field==='published'?!item.published:typeof item[field]==='boolean'?item[field]:true))rows.push([title,reviewValue(field,old?.[field]),reviewValue(field,item[field])]);
+   if(old?old.image!==item.image:Boolean(item.image))rows.push(['写真',old?.image?'写真あり':'写真なし',item.image?'写真あり':'写真なし（画像枠を省く）']);
+   if(old?JSON.stringify([old.badges,old.customBadge,old.customBadgeEnabled])!==JSON.stringify([item.badges,item.customBadge,item.customBadgeEnabled]):badgeLabels(item).length>0)rows.push(['バッジ',old?badgeLabels(old).join('・')||'なし':'なし',badgeLabels(item).join('・')||'なし']);
    if(item.reapplyNew&&item.newEnabled)rows.push(['NEWの起点','現在の起点を使用','今回の確定で付け直す']);
    const photos=old?.image!==item.image&&(old?.image||item.image)?`<div class="photo-review">${picture(old?.image,'変更前の写真')}${picture(item.image,'変更後の写真')}</div>`:'';
    groups.push(reviewGroup(item.name,key,`${label} · ${old?'変更':'追加'} / ${stateOf(prepared[key].find(i=>i.id===item.id),now())}`,rows,photos,item.id));
@@ -59,11 +65,13 @@ function groupedReview(base,snapshot,prepared){
  if(base.days!==snapshot.days)groups.push(reviewGroup('表示設定','settings','変更した項目',[['NEWの共通日数',`${base.days}日`,`${snapshot.days}日`]]));
  return `<p class="review-summary">変更対象 ${groups.length}件。アイテムごとに変更前後を確認してください。</p><div class="review-groups">${groups.join('')}</div>`;
 }
-function confirmWork(){
- if(!work||!workChanged(work.base,content))return;
+function confirmWork(after=null){
+ if(typeof after!=='function')after=null;
+ if(!work||!workChanged(work.base,content)){after?.();return;}
  const snapshot=clone(content),base=clone(work.base);let prepared;
  try{prepared=prepareWork(base,snapshot,read(selected),now());}catch(err){toast(err.message);return;}
- review('変更をまとめて確認',[],()=>{try{const final=prepareWork(base,snapshot,read(selected),now());if(!persist(final,'変更をまとめて反映しました。',true))return false;work=null;try{saveWork(selected,null);}catch{toast('反映しましたが作業内容の片付けに失敗しました。');}render();return true;}catch(err){toast(err.message);return false;}},()=>closeDialog(),groupedReview(base,snapshot,prepared));
+ review('変更をまとめて確認',[],()=>{try{const final=prepareWork(base,snapshot,read(selected),now());if(!persist(final,'変更をまとめて反映しました。',true))return false;work=null;try{saveWork(selected,null);}catch{toast('反映しましたが作業内容の片付けに失敗しました。');}render();const done=afterWorkCommit;afterWorkCommit=null;if(done)setTimeout(done,0);return true;}catch(err){toast(err.message);return false;}},()=>{afterWorkCommit=null;closeDialog();},groupedReview(base,snapshot,prepared));
+ afterWorkCommit=after;dialog.classList.add('compact-review');dialogGuard={dirty:()=>Boolean(work&&workChanged(work.base,content)),apply:()=>{},discard:()=>{const done=afterWorkCommit;afterWorkCommit=null;closeDialog();done?.();},message:'確定前の変更があります。反映せずに終了しても、作業一覧の内容は残ります。'};
  dialog.querySelector('#review-confirm').textContent='確定・まとめて反映';
 }
 
@@ -119,13 +127,29 @@ const range=document.createRange();range.selectNodeContents(byline);
 const spare=byline.getBoundingClientRect().width-range.getBoundingClientRect().width;
 byline.style.letterSpacing=`${spare/Array.from(byline.textContent).length}px`;
 }
-function render(){stopReorder?.();stopReorder=null;closeNewsDetail();app.innerHTML=page==='site'?renderSite():page==='admin'?renderAdmin():renderTerms();fitAdminByline();bind();headerObserver?.disconnect();const header=document.querySelector('header');headerObserver=new ResizeObserver(()=>document.documentElement.style.setProperty('--header-height',`${header.getBoundingClientRect().height}px`));headerObserver.observe(header);}
+function render(){stopReorder?.();stopReorder=null;closeNewsDetail();app.innerHTML=page==='site'?renderSite():page==='admin'?renderAdmin():renderTerms();fitAdminByline();bind();app.querySelectorAll('#basic-form,#days-form,.inquiry-form').forEach(f=>formBaselines.set(f,formValue(f)));headerObserver?.disconnect();const header=document.querySelector('header');headerObserver=new ResizeObserver(()=>document.documentElement.style.setProperty('--header-height',`${header.getBoundingClientRect().height}px`));headerObserver.observe(header);}
 function moveItem(from,to){
 if(!Number.isInteger(from)||!Number.isInteger(to)||from===to||from<0||to<0||from>=content.items.length||to>=content.items.length)return;
 const c=clone(content);c.items.splice(to,0,c.items.splice(from,1)[0]);const position=window.scrollY;persist(c);window.scrollTo({top:position,behavior:'instant'});
 }
-function closeDialog(){dialog.close();editorDraft=null;}
-function openDialog(html){dialog.innerHTML=html;if(!dialog.open)dialog.showModal();dialog.querySelectorAll('[data-close]').forEach(b=>b.onclick=closeDialog);}
+function closeDialog(){dialogGuard=null;dialog.close();editorDraft=null;dialog.classList.remove('compact-review');}
+function askExit({apply,discard,message='まだ反映していない入力があります。「反映する」で内容の確認へ進みます。'}){
+ if(exitPrompt)return;
+ const previous=document.activeElement;exitPrompt=document.createElement('dialog');exitPrompt.className='exit-confirm';exitPrompt.setAttribute('aria-labelledby','exit-title');
+ exitPrompt.innerHTML=`<div class="dialog-top"><h2 id="exit-title">変更を反映しますか？</h2><button id="exit-keep" aria-label="編集を続ける">閉じる</button></div><p>${esc(message)}</p><div class="actions"><button class="primary" id="exit-apply">反映する</button><button id="exit-discard">反映せずに終了</button><button id="exit-back">編集を続ける</button></div>`;
+ document.body.append(exitPrompt);exitPrompt.showModal();
+ const dismiss=()=>{exitPrompt.close();exitPrompt.remove();exitPrompt=null;if(previous?.isConnected)previous.focus({preventScroll:true});};
+ exitPrompt.querySelector('#exit-apply').onclick=()=>{dismiss();apply();};exitPrompt.querySelector('#exit-discard').onclick=()=>{dismiss();discard();};
+ for(const id of ['exit-keep','exit-back'])exitPrompt.querySelector('#'+id).onclick=dismiss;
+ exitPrompt.addEventListener('cancel',e=>{e.preventDefault();dismiss();});exitPrompt.addEventListener('click',e=>{if(e.target===exitPrompt)dismiss();});
+}
+function requestDialogClose(){if(dialogGuard?.dirty())askExit(dialogGuard);else closeDialog();}
+function openDialog(html){dialogGuard=null;dialog.classList.remove('compact-review');dialog.innerHTML=html;if(!dialog.open)dialog.showModal();dialog.querySelectorAll('[data-close]').forEach(b=>b.onclick=requestDialogClose);}
+dialog.addEventListener('cancel',e=>{e.preventDefault();requestDialogClose();});
+dialog.addEventListener('click',e=>{if(e.target===dialog){const r=dialog.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)requestDialogClose();}});
+window.addEventListener('beforeunload',e=>{if(page==='admin'&&!authorizedExit&&hasPending()){e.preventDefault();e.returnValue='';}});
+function applyPendingForms(){for(const form of pendingForms()){if(!form.reportValidity())return false;form.requestSubmit();if(form.isConnected&&pendingForms().includes(form))return false;}return true;}
+function requestNavigation(next,includeWork=true){const leave=()=>{if(includeWork){authorizedExit=true;setTimeout(()=>{authorizedExit=false;},1000);}next();};if(pendingForms().length||includeWork&&work&&workChanged(work.base,content))askExit({apply:()=>{if(applyPendingForms()){if(includeWork)confirmWork(leave);else leave();}},discard:leave,message:'未反映の変更があります。「反映する」で確認へ進みます。作業一覧へ追加した変更は、反映せずに終了しても残ります。'});else leave();}
 function review(title,rows,commit,back=null,body=null){openDialog(`<div class="dialog-top"><h2 id="dialog-title">${esc(title)}</h2><button type="button" data-close aria-label="確認を閉じる">閉じる</button></div><p class="small muted">確定すると、このブラウザの見本に反映します。インターネット全体への公開ではありません。</p>${body??`<dl class="review-grid">${rows.map(([k,v])=>`<dt>${esc(k)}</dt><dd>${lines(v)}</dd>`).join('')}</dl>`}<div class="actions sticky-actions">${back?'<button id="review-back">編集へ戻る</button>':'<button data-close>キャンセル</button>'}<button class="primary" id="review-confirm">OK・反映する</button></div>`);dialog.querySelector('#review-confirm').onclick=()=>{if(commit()!==false)closeDialog();};if(back)dialog.querySelector('#review-back').onclick=back;}
 function openPagePhotoEditor(id,draft=null){
 const slot=PAGE_IMAGE_SLOTS.find(s=>s.id===id);if(!slot)return;
@@ -142,8 +166,9 @@ finally{busy=false;form.querySelector('[type=submit]').disabled=false;e.target.v
 form.onsubmit=e=>{
 e.preventDefault();if(busy||!form.reportValidity())return;next.alt=String(new FormData(form).get('alt')).trim();
 const c=clone(content);c.photos[id]=clone(next);c.lastUpdated=Date.now();
-if(persist(c))closeDialog();
+if(persist(c)){closeDialog();return true;}return false;
 };
+const initial=formValue(form),initialSrc=next.src;dialogGuard={dirty:()=>busy||initial!==formValue(form)||initialSrc!==next.src,apply:()=>{if(busy)return toast('写真の処理が終わってから確認してください。');if(form.onsubmit({preventDefault(){}}))confirmWork();},discard:closeDialog};
 }
 function openEditor(kind,id,draft=null){const before=content[kind].find(i=>i.id===id);const item=draft||clone(before||{id:crypto.randomUUID(),name:'',price:'',body:'',image:'',kind:'お知らせ',articleAt:now(),published:false,hidden:false,startAt:null,endAt:null,newEnabled:false,newMode:'auto',featured:false,badges:[],customBadge:'',customBadgeEnabled:false});editorDraft=item;
 openDialog(`<div class="dialog-top"><h2 id="dialog-title">${before?'掲載内容を編集':'新しく追加'}</h2><button data-close aria-label="編集を閉じる">閉じる</button></div><form id="editor-form">${field('name','名称・タイトル',item.name,'text','required maxlength="100"')}${kind==='items'?field('price','価格（空欄なら表示しない）',item.price,'text','maxlength="100" placeholder="2,800円 / 月額 / 要相談"'):''}${textArea('body','紹介文・本文',item.body,'maxlength="2000"')}${kind==='news'?`<div class="field-grid"><label class="field"><span>種類</span><select name="kind"><option ${item.kind==='お知らせ'?'selected':''}>お知らせ</option><option ${item.kind==='キャンペーン'?'selected':''}>キャンペーン</option></select></label>${field('articleAt','記事の日付',dateInput(item.articleAt).slice(0,10),'date','required')}</div><label class="check"><input name="featured" type="checkbox" ${item.featured?'checked':''}>ピックアップして表示</label>`:''}<label class="field"><span>写真（任意）</span><input id="photo-file" type="file" accept="image/jpeg,image/png,image/webp"><img class="preview-photo" id="photo-preview" ${item.image?`src="${imgSrc(item.image)}"`:"hidden"} alt="選択中の写真"><span class="small muted">JPEG・PNG・WebP / 最大8MB。容量を整えて保存し、中央を基準にトリミング表示します。</span></label><button type="button" id="photo-remove" ${item.image?"":"hidden"}>写真を外す</button><p class="small muted">写真なしでも掲載できます。写真がなければ画像の枠も表示しません。</p><fieldset class="editor-options badge-options"><legend>表示するバッジ（複数選択）</legend><div class="badge-choices">${BADGE_OPTIONS.map(option=>`<label class="check"><input type="checkbox" name="badges" value="${option.id}" ${badgeIds(item).includes(option.id)?'checked':''}>${esc(option.label)}</label>`).join('')}<label class="check"><input type="checkbox" name="customBadgeEnabled" id="custom-badge-enabled" ${item.customBadgeEnabled?'checked':''}>自由入力を付ける</label><label class="check"><input id="new-enabled" name="newEnabled" type="checkbox" ${item.newEnabled?'checked':''}>NEWを付ける</label></div>${field('customBadge',`自由入力（全角${CUSTOM_BADGE_LIMIT}文字まで・1つ）`,item.customBadge,'text','maxlength="60" placeholder="例：予約限定" aria-describedby="custom-badge-count"')}<p id="custom-badge-count" class="small muted" aria-live="polite"></p><p class="small muted">選択したバッジを表示します。「終了」も表示用の言葉で、掲載期間は下で設定します。NEW以外はチェックを外すまで残ります。</p><h3>NEWの表示期間</h3><label class="field" id="new-mode-field" ${item.newEnabled?'':'hidden'}><span>消し方</span><select name="newMode"><option value="auto" ${item.newMode==='auto'?'selected':''}>${content.days}日後に自動で消す</option><option value="manual" ${item.newMode==='manual'?'selected':''}>手動で外すまで残す</option></select></label>${before?.firstPublishedAt?'<label class="check" id="reapply-field"><input name="reapply" type="checkbox">今回の公開でNEWを付け直す（期間を再開）</label>':''}<p class="small muted">付けない場合は表示しません。通常の編集では表示期間を延ばしません。</p></fieldset><div class="editor-options"><h3>掲載する期間</h3><div class="field-grid">${field('startAt','公開日時（空欄なら今すぐ）',item.startAt?dateInput(item.startAt):'','datetime-local')}${field('endAt','終了日時（空欄なら終了なし）',item.endAt?dateInput(item.endAt):'','datetime-local')}</div><p class="small muted">日時は端末の時刻で入力してください。現在の表示確認時刻：${displayDate(now(),true)}</p><label class="check"><input name="hidden" type="checkbox" ${item.hidden?'checked':''}>非表示にする</label></div><p class="error" id="editor-error" role="alert"></p><div class="actions sticky-actions"><button type="button" data-close>キャンセル</button><button type="button" id="save-draft">下書きとして作業一覧へ追加</button><button class="primary" type="submit">編集内容を作業一覧へ追加</button></div></form>`);
@@ -152,7 +177,7 @@ const customInput=form.elements.customBadge,customEnabled=form.elements.customBa
 function validateCustom(){let error='';try{const text=customBadgeText(customInput.value);if(customEnabled.checked&&!text)error='自由入力バッジの文字を入力してください。';}catch(err){error=err.message;}customInput.setCustomValidity(error);form.querySelector('#custom-badge-count').textContent=`${badgeLength(customInput.value.trim().normalize('NFC'))} / ${CUSTOM_BADGE_LIMIT}文字`;}
 customInput.addEventListener('input',validateCustom);customInput.addEventListener('compositionend',validateCustom);customEnabled.addEventListener('change',validateCustom);validateCustom();
 form.querySelector('#photo-remove').onclick=()=>{item.image='';const preview=form.querySelector('#photo-preview');preview.hidden=true;preview.removeAttribute('src');form.querySelector('#photo-file').value='';form.querySelector('#photo-remove').hidden=true;};
-let photoBusy=false;form.querySelector('#photo-file').onchange=async e=>{if(!e.target.files[0])return;photoBusy=true;form.querySelector('#editor-error').textContent='写真を処理しています…';try{const value=await optimizePhoto(e.target.files[0]);item.image=value;form.querySelector('#photo-preview').src=value;form.querySelector('#photo-preview').hidden=false;form.querySelector('#photo-remove').hidden=false;form.querySelector('#editor-error').textContent='';}catch(err){form.querySelector('#editor-error').textContent=err.message;}finally{photoBusy=false;}};
+let photoBusy=false;form.querySelector('#photo-file').onchange=async e=>{if(!e.target.files[0])return;photoBusy=true;form.querySelector('#editor-error').textContent='写真を処理しています…';try{const value=await optimizePhoto(e.target.files[0]);if(!form.isConnected)return;item.image=value;form.querySelector('#photo-preview').src=value;form.querySelector('#photo-preview').hidden=false;form.querySelector('#photo-remove').hidden=false;form.querySelector('#editor-error').textContent='';}catch(err){form.querySelector('#editor-error').textContent=err.message;}finally{photoBusy=false;}};
 function submit(publish){validateCustom();if(!form.reportValidity())return;if(photoBusy){form.querySelector('#editor-error').textContent='写真の処理が終わってから確認してください。';return;}
 const f=new FormData(form);const next={...item,name:String(f.get('name')).trim(),body:String(f.get('body')).trim(),price:kind==='items'?String(f.get('price')).trim():'',badges:badgeIds({badges:f.getAll('badges')}),customBadge:badgeLength(String(f.get('customBadge')).trim().normalize('NFC'))<=CUSTOM_BADGE_LIMIT?customBadgeText(f.get('customBadge')):'',customBadgeEnabled:f.has('customBadgeEnabled'),newEnabled:f.has('newEnabled'),newMode:f.get('newMode'),hidden:f.has('hidden'),startAt:f.get('startAt')?new Date(f.get('startAt')).getTime():null,endAt:f.get('endAt')?new Date(f.get('endAt')).getTime():null};
 if(!next.name){form.querySelector('#editor-error').textContent='名称を入力してください。';return;}
@@ -160,8 +185,9 @@ if(kind==='news'){next.kind=f.get('kind');next.featured=f.has('featured');next.a
 const final={...next,published:publish,reapplyNew:f.has('reapply')&&next.newEnabled};
 if(final.endAt&&final.endAt<=(final.startAt||now())){form.querySelector('#editor-error').textContent='終了日時は公開日時より後にしてください。';return;}
 if(!before&&kind==='news'&&content.news.length>=20){toast('お知らせは非表示を含め20件までです。');return;}
-const c=clone(content),index=c[kind].findIndex(i=>i.id===final.id);if(index>=0)c[kind][index]=final;else c[kind].push(final);if(persist(c))closeDialog();
+const c=clone(content),index=c[kind].findIndex(i=>i.id===final.id);if(index>=0)c[kind][index]=final;else c[kind].push(final);if(persist(c)){closeDialog();return true;}return false;
 }
+const initial=formValue(form),initialImage=item.image;dialogGuard={dirty:()=>photoBusy||initial!==formValue(form)||initialImage!==item.image,apply:()=>{if(submit(true))confirmWork();},discard:closeDialog};
 form.onsubmit=e=>{e.preventDefault();submit(true);};form.querySelector('#save-draft').onclick=()=>submit(false);
 }
 async function optimizePhoto(file){if(!['image/jpeg','image/png','image/webp'].includes(file.type))throw new Error('JPEG・PNG・WebPの写真を選んでください。');if(file.size>8*1024*1024)throw new Error('写真は8MB以下で選んでください。');const bitmap=await createImageBitmap(file);try{const scale=Math.min(1,1600/Math.max(bitmap.width,bitmap.height));const canvas=document.createElement('canvas');canvas.width=Math.max(1,Math.round(bitmap.width*scale));canvas.height=Math.max(1,Math.round(bitmap.height*scale));canvas.getContext('2d').drawImage(bitmap,0,0,canvas.width,canvas.height);return canvas.toDataURL('image/webp',.8);}finally{bitmap.close();}}
@@ -170,7 +196,7 @@ if(page==='site'){document.querySelector('#demo-hide')?.addEventListener('click'
 if(page!=='admin')return;
 if(!entered){document.querySelector('#enter').onclick=()=>{entered=true;sessionStorage.setItem('site-base-demo-entered','yes');render();};return;}
 document.querySelector('#work-review')?.addEventListener('click',confirmWork);document.querySelector('#work-discard')?.addEventListener('click',()=>review('未反映の変更を取り消す',[['対象','作業中の変更だけを取り消し、公開側の内容へ戻します。']],()=>{try{saveWork(selected,null);work=null;published=read(selected);content=clone(published);render();return true;}catch{toast('取り消せませんでした。作業内容は残しています。');return false;}}));
-document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{const left=document.querySelector('.sidebar').scrollLeft;tab=b.dataset.tab;render();document.querySelector('.sidebar').scrollLeft=left;document.querySelector(`[data-tab="${tab}"]`).focus({preventScroll:true});window.scrollTo({top:0,behavior:'instant'});});document.querySelector('[data-add]')?.addEventListener('click',e=>openEditor(e.currentTarget.dataset.add));document.querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>openEditor(b.dataset.kind,b.dataset.edit));
+document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{const left=document.querySelector('.sidebar').scrollLeft;requestNavigation(()=>{tab=b.dataset.tab;render();document.querySelector('.sidebar').scrollLeft=left;document.querySelector(`[data-tab="${tab}"]`).focus({preventScroll:true});window.scrollTo({top:0,behavior:'instant'});},false);});document.querySelector('[data-add]')?.addEventListener('click',e=>openEditor(e.currentTarget.dataset.add));document.querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>openEditor(b.dataset.kind,b.dataset.edit));
 document.querySelectorAll('[data-photo-edit]').forEach(b=>b.onclick=()=>openPagePhotoEditor(b.dataset.photoEdit));
 document.querySelectorAll('[data-hide]').forEach(b=>b.onclick=()=>{const c=clone(content),i=c[b.dataset.kind].find(i=>i.id===b.dataset.hide);i.hidden=!i.hidden;c.lastUpdated=Date.now();persist(c);});
 document.querySelectorAll('[data-delete]').forEach(b=>b.onclick=()=>{const c=clone(content),i=c[b.dataset.kind].find(i=>i.id===b.dataset.delete);c[b.dataset.kind]=c[b.dataset.kind].filter(a=>a.id!==i.id);persist(c);});
@@ -189,3 +215,7 @@ let lastClock=now();setInterval(()=>{const current=now();const changed=[...conte
 render();
 document.fonts.ready.then(fitAdminByline);
 window.addEventListener('resize',fitAdminByline);
+
+// Protect in-app exits; opening another tab does not end this editing session.
+app.addEventListener('click',e=>{const a=e.target.closest('a[href]');if(page!=='admin'||!a||a.target==='_blank'||e.ctrlKey||e.metaKey||e.shiftKey||a.getAttribute('href').startsWith('#'))return;if(hasPending()){e.preventDefault();e.stopImmediatePropagation();requestNavigation(()=>location.assign(a.href));}},true);
+app.addEventListener('change',e=>{if(page==='admin'&&e.target.id==='profile'&&hasPending()){const chosen=e.target.value;e.preventDefault();e.stopImmediatePropagation();e.target.value=selected;requestNavigation(()=>location.assign(`./admin.html?profile=${encodeURIComponent(chosen)}`));}},true);
