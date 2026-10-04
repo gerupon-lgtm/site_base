@@ -1,6 +1,6 @@
 // © 2026 SIKUMI LAB — SITE BASE
-export function newsList(news,esc,newBadge) {
-  return news.map(n=>`<article class="news-card ${n.featured?'featured':''}"><h3><button class="news-title" data-news="${esc(n.id)}" aria-expanded="false" aria-controls="news-detail"><span class="news-title-label"><span>${esc(n.name)}</span>${newBadge(n)}</span><span class="news-open-icon" aria-hidden="true">＋</span></button></h3></article>`).join('')||'<p>現在掲載中のお知らせはありません。</p>';
+export function newsList(news,esc,renderBadges) {
+  return news.map(n=>`<article class="news-card ${n.featured?'featured':''}"><h3><button class="news-title" data-news="${esc(n.id)}" aria-expanded="false" aria-controls="news-detail"><span class="news-title-label"><span>${esc(n.name)}</span>${renderBadges(n)}</span><span class="news-open-icon" aria-hidden="true">＋</span></button></h3></article>`).join('')||'<p>現在掲載中のお知らせはありません。</p>';
 }
 
 export const newsDetailShell = '<section id="news-detail" class="news-detail" role="dialog" aria-labelledby="news-detail-title" hidden><div class="news-detail-top"><h2 id="news-detail-title"></h2><button type="button" class="news-detail-close" aria-label="お知らせの詳細を閉じる">閉じる</button></div><div class="news-detail-content"></div></section>';
