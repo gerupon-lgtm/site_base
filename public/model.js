@@ -1,6 +1,6 @@
 // © 2026 SIKUMI LAB — SITE BASE
-export const VERSION = '20261004-22';
-import {PAGE_IMAGE_SLOTS,BADGE_OPTIONS,CUSTOM_BADGE_LIMIT} from './site-config.js?v=20261004-22';
+export const VERSION = '20261005-1';
+import {PAGE_IMAGE_SLOTS,BADGE_OPTIONS,CUSTOM_BADGE_LIMIT} from './site-config.js?v=20261005-1';
 export const PROFILES = { shop: '小さなお店', school: '教室', service: 'サービス業' };
 export const STORAGE_KEY = 'site-base-display-sample-v1';
 const day = 86400000;
