@@ -1,9 +1,9 @@
 // © 2026 SIKUMI LAB — SITE BASE
-import {VERSION,PROFILES,clone,read,readAll,save,seed,stateOf,hasNew,publishedNews,displayDate,dateInput,preparePublication,badgeIds,badgeLabels,badgeLength,customBadgeText,WORK_KEY,publicPart,workChanged,readWork,saveWork,prepareWork} from './model.js?v=20261004-18';
-import {CONDITIONS, CONDITIONS_REVISION} from './conditions.js?v=20261004-18';
-import {newsList,newsDetailShell,bindNewsDetails,closeNewsDetail} from './news-details.js?v=20261004-18';
-import {PAGE_IMAGE_SLOTS,BADGE_OPTIONS,CUSTOM_BADGE_LIMIT} from './site-config.js?v=20261004-18';
-import {attachReorder} from './reorder.js?v=20261004-18';
+import {VERSION,PROFILES,clone,read,readAll,save,seed,stateOf,hasNew,publishedNews,displayDate,dateInput,preparePublication,badgeIds,badgeLabels,badgeLength,customBadgeText,WORK_KEY,publicPart,workChanged,readWork,saveWork,prepareWork} from './model.js?v=20261004-19';
+import {CONDITIONS, CONDITIONS_REVISION} from './conditions.js?v=20261004-19';
+import {newsList,newsDetailShell,bindNewsDetails,closeNewsDetail} from './news-details.js?v=20261004-19';
+import {PAGE_IMAGE_SLOTS,BADGE_OPTIONS,CUSTOM_BADGE_LIMIT} from './site-config.js?v=20261004-19';
+import {attachReorder} from './reorder.js?v=20261004-19';
 const profile=new URLSearchParams(location.search).get('profile');
 const selected=Object.hasOwn(PROFILES,profile)?profile:'shop';
 const page=document.body.dataset.page;
@@ -22,34 +22,51 @@ function persist(next,message='このブラウザに保存しました。',immed
  try{save(next);published=clone(next);content=next;render();toast(message);return true;}catch{toast('保存できませんでした。ブラウザの空き容量や保存設定を確認してください。入力内容は画面に残しています。');return false;}
 }
 function workingNotice(){const dirty=work&&workChanged(work.base,content);return `<section class="working-bar" aria-label="編集内容の確定"><div><strong>${dirty?'未反映の変更があります':'公開側と同じ内容です'}</strong><p class="small muted">編集や写真の変更は作業内容として保存します。最後の確定まで公開側は変わりません。</p></div><div class="actions"><button class="primary" id="work-review" ${dirty?'':'disabled'}>変更内容を確認</button><button id="work-discard" ${dirty?'':'disabled'}>未反映の変更を取り消す</button></div></section>`;}
-function reviewValue(field,value){if(value==null||value==='')return 'なし';if(['startAt','endAt','articleAt'].includes(field))return displayDate(value,true);if(typeof value==='boolean')return value?'オン':'オフ';if(field==='newMode')return value==='manual'?'手動で外す':'設定日数で自動終了';return String(value);}
+function reviewValue(field,value){if(value==null||value==='')return 'なし';if(['startAt','endAt','articleAt'].includes(field))return displayDate(value,true);if(field==='hidden')return value?'非表示':'表示';if(field==='published')return value?'公開する':'下書き';if(typeof value==='boolean')return value?'オン':'オフ';if(field==='newMode')return value==='manual'?'手動で外す':'設定日数で自動終了';return String(value);}
+function reviewGroup(title,kind,status,rows,photos='',id=''){
+ return `<section class="review-group" data-review-kind="${esc(kind)}" data-review-id="${esc(id)}"><header><h3>${esc(title)}</h3><p class="small muted">${esc(status)}</p></header><table class="review-table"><colgroup><col class="review-field"><col><col></colgroup><thead><tr><th scope="col">項目</th><th scope="col">変更前</th><th scope="col">変更後</th></tr></thead><tbody>${rows.map(([label,before,after])=>`<tr><th scope="row">${esc(label)}</th><td>${lines(before)}</td><td>${lines(after)}</td></tr>`).join('')}</tbody></table>${photos}</section>`;
+}
+function groupedReview(base,snapshot,prepared){
+ const groups=[];
+ const picture=(src,label)=>`<figure><figcaption>${esc(label)}</figcaption>${src?`<img class="page-photo-preview" src="${imgSrc(src)}" alt="${esc(label)}">`:'<p class="small muted">写真なし</p>'}</figure>`;
+ for(const key of ['items','news']){
+  const label=key==='items'?'掲載内容':'お知らせ';
+  const beforeIds=base[key].filter(i=>snapshot[key].some(next=>next.id===i.id)).map(i=>i.id),afterIds=snapshot[key].filter(i=>base[key].some(old=>old.id===i.id)).map(i=>i.id);
+  const reordered=JSON.stringify(beforeIds)!==JSON.stringify(afterIds);
+  for(const [index,item]of snapshot[key].entries()){
+   const oldIndex=base[key].findIndex(i=>i.id===item.id),old=base[key][oldIndex];
+   if(old&&JSON.stringify(old)===JSON.stringify(item)&&(!reordered||oldIndex===index))continue;
+   const rows=[];
+   if(!old||reordered&&oldIndex!==index)rows.push(['表示順',old?`${oldIndex+1}番目`:'なし',`${index+1}番目`]);
+   for(const [field,title]of [['name','名称'],['price','価格'],['body','本文'],['hidden','表示状態'],['published','公開設定'],['startAt','公開日時'],['endAt','終了日時'],['newEnabled','NEW'],['newMode','NEWの消し方'],['featured','ピックアップ'],['kind','種類'],['articleAt','記事日付']])if(old?old[field]!==item[field]:item[field]!=null)rows.push([title,reviewValue(field,old?.[field]),reviewValue(field,item[field])]);
+   if(!old||old.image!==item.image)rows.push(['写真',old?.image?'写真あり':'写真なし',item.image?'写真あり':'写真なし（画像枠を省く）']);
+   if(!old||JSON.stringify([old.badges,old.customBadge,old.customBadgeEnabled])!==JSON.stringify([item.badges,item.customBadge,item.customBadgeEnabled]))rows.push(['バッジ',old?badgeLabels(old).join('・')||'なし':'なし',badgeLabels(item).join('・')||'なし']);
+   if(item.reapplyNew&&item.newEnabled)rows.push(['NEWの起点','現在の起点を使用','今回の確定で付け直す']);
+   const photos=old?.image!==item.image&&(old?.image||item.image)?`<div class="photo-review">${picture(old?.image,'変更前の写真')}${picture(item.image,'変更後の写真')}</div>`:'';
+   groups.push(reviewGroup(item.name,key,`${label} · ${old?'変更':'追加'} / ${stateOf(prepared[key].find(i=>i.id===item.id),now())}`,rows,photos,item.id));
+  }
+  for(const old of base[key])if(!snapshot[key].some(item=>item.id===old.id))groups.push(reviewGroup(old.name,key,`${label} · 削除`,[['掲載','保存済みの内容','削除する']],'',old.id));
+ }
+ const shopRows=[],shopLabels={name:'公開名',intro:'トップの見出し',description:'紹介文',itemsLabel:'掲載内容の見出し',address:'所在地',hours:'営業時間・受付時間',closed:'休業日'};
+ for(const [key,label]of Object.entries(shopLabels))if(snapshot.shop[key]!==base.shop[key])shopRows.push([label,reviewValue(key,base.shop[key]),reviewValue(key,snapshot.shop[key])]);
+ if(shopRows.length)groups.push(reviewGroup('基本情報','basic','変更した項目',shopRows));
+ for(const slot of PAGE_IMAGE_SLOTS){const old=base.photos[slot.id],next=snapshot.photos[slot.id];if(JSON.stringify(old)===JSON.stringify(next))continue;
+  const rows=[];if(old.alt!==next.alt)rows.push(['写真の説明',reviewValue('alt',old.alt),reviewValue('alt',next.alt)]);
+  if(old.src!==next.src)rows.push(['写真',old.src?'写真あり':'写真なし',next.src?'写真あり':'写真なし（画像枠を省く）']);
+  const photos=old.src!==next.src?`<div class="photo-review">${picture(old.src,'変更前の写真')}${picture(next.src,'変更後の写真')}</div>`:'';
+  groups.push(reviewGroup(slot.label,'photos','ページの写真 · 変更',rows,photos,slot.id));
+ }
+ if(base.days!==snapshot.days)groups.push(reviewGroup('表示設定','settings','変更した項目',[['NEWの共通日数',`${base.days}日`,`${snapshot.days}日`]]));
+ return `<p class="review-summary">変更対象 ${groups.length}件。アイテムごとに変更前後を確認してください。</p><div class="review-groups">${groups.join('')}</div>`;
+}
 function confirmWork(){
  if(!work||!workChanged(work.base,content))return;
  const snapshot=clone(content),base=clone(work.base);let prepared;
  try{prepared=prepareWork(base,snapshot,read(selected),now());}catch(err){toast(err.message);return;}
- const rows=[];
- for(const key of ['items','news']){
-  const label=key==='items'?'掲載内容':'お知らせ';
-  if(JSON.stringify(base[key].map(i=>i.id))!==JSON.stringify(snapshot[key].map(i=>i.id)))rows.push([label+'の一覧・順序',base[key].map(i=>i.name).join(' → ')+`\n↓\n`+snapshot[key].map(i=>i.name).join(' → ')]);
-  for(const item of snapshot[key]){const old=base[key].find(i=>i.id===item.id);if(old&&JSON.stringify(old)===JSON.stringify(item))continue;
-   rows.push([item.name,`${old?'変更':'追加'} / ${stateOf(prepared[key].find(i=>i.id===item.id),now())}`]);
-   for(const [field,label]of [['name','名称'],['price','価格'],['body','本文'],['hidden','非表示'],['published','公開設定'],['startAt','公開日時'],['endAt','終了日時'],['newEnabled','NEW'],['newMode','NEWの消し方'],['featured','ピックアップ'],['kind','種類'],['articleAt','記事日付']])if(!old||old[field]!==item[field])rows.push([item.name+'：'+label,`${reviewValue(field,old?.[field])} → ${reviewValue(field,item[field])}`]);
-   if(!old||old.image!==item.image)rows.push([item.name+'：写真',item.image?'選んだ写真へ変更':'写真なし（画像枠を省く）']);
-   if(!old||JSON.stringify([old.badges,old.customBadge,old.customBadgeEnabled])!==JSON.stringify([item.badges,item.customBadge,item.customBadgeEnabled]))rows.push([item.name+'：バッジ',`${old?badgeLabels(old).join('・')||'なし':'なし'} → ${badgeLabels(item).join('・')||'なし'}`]);
-   if(item.reapplyNew&&item.newEnabled)rows.push([item.name+'：NEWの起点','今回の確定で付け直す']);
-  }
- }
- const shopLabels={name:'公開名',intro:'トップの見出し',description:'紹介文',itemsLabel:'掲載内容の見出し',address:'所在地',hours:'営業時間・受付時間',closed:'休業日'};for(const [key,label]of Object.entries(shopLabels))if(snapshot.shop[key]!==base.shop[key])rows.push(['基本情報：'+label,`${base.shop[key]} → ${snapshot.shop[key]}`]);
- for(const slot of PAGE_IMAGE_SLOTS)if(JSON.stringify(base.photos[slot.id])!==JSON.stringify(snapshot.photos[slot.id]))rows.push([slot.label,'作業中に選んだ写真・説明を反映']);
- if(base.days!==snapshot.days)rows.push(['NEWの共通日数',`${base.days}日 → ${snapshot.days}日`]);
- review('変更をまとめて確認',rows,()=>{try{const final=prepareWork(base,snapshot,read(selected),now());if(!persist(final,'変更をまとめて反映しました。',true))return false;work=null;try{saveWork(selected,null);}catch{toast('反映しましたが作業内容の片付けに失敗しました。');}render();return true;}catch(err){toast(err.message);return false;}},()=>closeDialog());
+ review('変更をまとめて確認',[],()=>{try{const final=prepareWork(base,snapshot,read(selected),now());if(!persist(final,'変更をまとめて反映しました。',true))return false;work=null;try{saveWork(selected,null);}catch{toast('反映しましたが作業内容の片付けに失敗しました。');}render();return true;}catch(err){toast(err.message);return false;}},()=>closeDialog(),groupedReview(base,snapshot,prepared));
  dialog.querySelector('#review-confirm').textContent='確定・まとめて反映';
- const picture=(src,label)=>`<figure><figcaption>${esc(label)}</figcaption>${src?`<img class="page-photo-preview" src="${imgSrc(src)}" alt="${esc(label)}">`:'<p class="small muted">写真なし</p>'}</figure>`;
- let previews='';for(const key of ['items','news'])for(const item of snapshot[key]){const old=base[key].find(i=>i.id===item.id);if(old?.image!==item.image&&(old?.image||item.image))previews+=`<h3>${esc(item.name)}：写真</h3><div class="photo-review">${picture(old?.image,'変更前')}${picture(item.image,'変更後')}</div>`;}
- for(const slot of PAGE_IMAGE_SLOTS)if(base.photos[slot.id].src!==snapshot.photos[slot.id].src)previews+=`<h3>${esc(slot.label)}</h3><div class="photo-review">${picture(base.photos[slot.id].src,'変更前')}${picture(snapshot.photos[slot.id].src,'変更後')}</div>`;
- if(previews)dialog.querySelector('.review-grid').insertAdjacentHTML('beforebegin',previews);
-
 }
+
 
 try {const saved=readAll()[selected];if(!saved||saved.sampleNewsRevision!==published.sampleNewsRevision||PAGE_IMAGE_SLOTS.some(slot=>!saved.photos?.[slot.id])||[...saved.items,...saved.news].some(item=>!Array.isArray(item.badges)||typeof item.customBadge!=='string'||typeof item.customBadgeEnabled!=='boolean'))save(published);}catch{toast('このブラウザでは保存できません。保存設定をご確認ください。');}
 function pageImage(id,extra=''){
@@ -68,7 +85,7 @@ function renderAdmin(){if(!entered)return adminEntry();return `${adminHeader()}<
 function row(i,kind,index,length){return `<article class="list-row ${i.image?"":"no-photo"} ${kind==='items'?'item-row reorderable':''}" ${kind==='items'?`data-index="${index}" role="listitem"`:''}>${i.image?`<img src="${imgSrc(i.image)}" alt="" draggable="false">`:""}<div class="item-copy"><h3>${esc(i.name)}</h3><p>${i.price?esc(i.price)+'　':''}<span class="state ${stateOf(i,now())==='公開中'?'live':''}">${stateOf(i,now())}</span> ${badges(i)}</p><p class="small muted">${i.startAt?'開始 '+displayDate(i.startAt,true):'即時公開'}${i.endAt?' / 終了 '+displayDate(i.endAt,true):' / 終了なし'}</p></div><div class="actions row-controls"><button data-edit="${i.id}" data-kind="${kind}">編集</button><button data-hide="${i.id}" data-kind="${kind}">${i.hidden?'再表示':'非表示'}</button>${kind==='items'?`<button data-move="${i.id}" data-direction="-1" aria-label="${esc(i.name)}を上へ" ${index===0?'disabled':''}>↑</button><button data-move="${i.id}" data-direction="1" aria-label="${esc(i.name)}を下へ" ${index===length-1?'disabled':''}>↓</button>`:''}<button class="danger" data-delete="${i.id}" data-kind="${kind}">削除</button></div></article>`;}
 function field(name,label,value='',type='text',extra=''){return `<label class="field"><span>${label}</span><input name="${name}" type="${type}" value="${esc(value)}" ${extra}></label>`;}
 function textArea(name,label,value,extra=''){return `<label class="field"><span>${label}</span><textarea name="${name}" ${extra}>${lines(value)}</textarea></label>`;}
-function renderPanel(){if(tab==='items'||tab==='news'){const a=content[tab];return `<div class="admin-heading"><div><h1>${tab==='items'?esc(content.shop.itemsLabel):'お知らせ'}</h1><p class="muted">${tab==='items'?'名称・価格・写真・表示順を変更できます。':`保存 ${a.length}/20件（非表示も含む）・公開表示は最大10件`}</p></div><div class="actions"><button class="primary" data-add="${tab}" ${tab==='news'&&a.length>=20?'disabled':''}>＋ 新しく追加</button></div></div><div class="notice">一覧へ戻した内容はまだ未反映です。まとめて編集し、最後に上のボタンから確定します。<p class="clock-note">表示確認時刻：${displayDate(now(),true)}${localStorage.getItem('site-base-demo-clock')?'（手動設定）':'（現在時刻）'}</p></div>${tab==='items'&&a.length?'<p class="reorder-hint">カードを長押しして移動 ／ 右端の↑↓でも移動</p>':''}<div ${tab==='items'?'data-reorder-list role="list" aria-label="掲載内容の表示順"':''}>${a.map((i,index)=>row(i,tab,index,a.length)).join('')||'<p>まだ登録されていません。</p>'}</div>`;}
+function renderPanel(){if(tab==='items'||tab==='news'){const a=content[tab];return `<div class="admin-heading"><div><h1>${tab==='items'?esc(content.shop.itemsLabel):'お知らせ'}</h1><p class="muted">${tab==='items'?'名称・価格・写真・表示順を変更できます。':`保存 ${a.length}/20件（非表示も含む）・公開表示は最大10件`}</p></div><div class="actions"><button class="primary" data-add="${tab}" ${tab==='news'&&a.length>=20?'disabled':''}>＋ 新しく追加</button></div></div><div class="notice">${work&&workChanged(work.base,content)?'編集中の内容はまだ公開側に反映されていません。最後に上のボタンからまとめて確定します。':'未反映の変更はありません。編集後は、上のボタンからまとめて確定できます。'}<p class="clock-note">表示確認時刻：${displayDate(now(),true)}${localStorage.getItem('site-base-demo-clock')?'（手動設定）':'（現在時刻）'}</p></div>${tab==='items'&&a.length?'<p class="reorder-hint">カードを長押しして移動 ／ 右端の↑↓でも移動</p>':''}<div ${tab==='items'?'data-reorder-list role="list" aria-label="掲載内容の表示順"':''}>${a.map((i,index)=>row(i,tab,index,a.length)).join('')||'<p>まだ登録されていません。</p>'}</div>`;}
 if(tab==='photos')return `<h1>ページの写真</h1><p class="muted">トップやご案内など、ページ内の写真をそれぞれ差し替えられます。</p><div class="notice">写真の配置と表示枠は初期設定で用意します。縦横比を保ち、表示枠の中央を基準にトリミングします。掲載内容・お知らせの写真は、それぞれの編集画面で変更できます。</div><div class="page-photo-grid">${PAGE_IMAGE_SLOTS.map(slot=>`<article class="page-photo-card"><h3>${esc(slot.label)}</h3>${pageImage(slot.id,'class="page-photo-preview"')}<button data-photo-edit="${esc(slot.id)}">${content.photos[slot.id]?.src?"写真を差し替える":"写真を追加する"}</button></article>`).join('')}</div>`;
 if(tab==='basic')return `<h1>基本情報</h1><p class="muted">見出しや紹介文を、事業に合わせる画面の見本です。</p><form id="basic-form" class="admin-panels">${field('name','公開名',content.shop.name,'text','required maxlength="80"')}${textArea('intro','トップの見出し',content.shop.intro,'required maxlength="180"')}${textArea('description','紹介文',content.shop.description,'maxlength="1000"')}${field('itemsLabel','掲載内容の見出し',content.shop.itemsLabel,'text','required maxlength="40"')}${field('address','所在地',content.shop.address,'text','maxlength="180"')}${field('hours','営業時間・受付時間',content.shop.hours,'text','maxlength="180"')}${field('closed','休業日',content.shop.closed,'text','maxlength="180"')}<button class="primary">変更を作業内容へ追加</button></form>`;
 if(tab==='inquiries')return `<h1>問い合わせ</h1><div class="notice">返信は普段のメールで行い、この画面では受付履歴と対応状況を管理します。この見本の受付情報はブラウザ内のみで、メール通知は行いません。個人情報は入力しないでください。</div>${content.inquiries.map(i=>`<article class="inquiry"><h3>${esc(i.name)}</h3><p class="muted small">${displayDate(i.receivedAt,true)} / ${esc(i.email)}</p><p class="pre">${lines(i.body)}</p><form class="inquiry-form" data-id="${i.id}"><div class="field-grid"><label class="field"><span>対応状況（手動更新）</span><select name="status">${['未対応','対応中','対応済み'].map(v=>`<option ${i.status===v?'selected':''}>${v}</option>`).join('')}</select></label>${textArea('memo','内部メモ',i.memo,'maxlength="1500"')}</div><p class="small muted">${esc(i.notification)}</p><button>対応状況・メモを保存</button></form></article>`).join('')||'<p>受付履歴はありません。</p>'}`;
@@ -109,7 +126,7 @@ const c=clone(content);c.items.splice(to,0,c.items.splice(from,1)[0]);const posi
 }
 function closeDialog(){dialog.close();editorDraft=null;}
 function openDialog(html){dialog.innerHTML=html;if(!dialog.open)dialog.showModal();dialog.querySelectorAll('[data-close]').forEach(b=>b.onclick=closeDialog);}
-function review(title,rows,commit,back=null){openDialog(`<div class="dialog-top"><h2 id="dialog-title">${esc(title)}</h2><button type="button" data-close aria-label="確認を閉じる">閉じる</button></div><p class="small muted">確定すると、このブラウザの見本に反映します。インターネット全体への公開ではありません。</p><dl class="review-grid">${rows.map(([k,v])=>`<dt>${esc(k)}</dt><dd>${lines(v)}</dd>`).join('')}</dl><div class="actions sticky-actions">${back?'<button id="review-back">編集へ戻る</button>':'<button data-close>キャンセル</button>'}<button class="primary" id="review-confirm">OK・反映する</button></div>`);dialog.querySelector('#review-confirm').onclick=()=>{if(commit()!==false)closeDialog();};if(back)dialog.querySelector('#review-back').onclick=back;}
+function review(title,rows,commit,back=null,body=null){openDialog(`<div class="dialog-top"><h2 id="dialog-title">${esc(title)}</h2><button type="button" data-close aria-label="確認を閉じる">閉じる</button></div><p class="small muted">確定すると、このブラウザの見本に反映します。インターネット全体への公開ではありません。</p>${body??`<dl class="review-grid">${rows.map(([k,v])=>`<dt>${esc(k)}</dt><dd>${lines(v)}</dd>`).join('')}</dl>`}<div class="actions sticky-actions">${back?'<button id="review-back">編集へ戻る</button>':'<button data-close>キャンセル</button>'}<button class="primary" id="review-confirm">OK・反映する</button></div>`);dialog.querySelector('#review-confirm').onclick=()=>{if(commit()!==false)closeDialog();};if(back)dialog.querySelector('#review-back').onclick=back;}
 function openPagePhotoEditor(id,draft=null){
 const slot=PAGE_IMAGE_SLOTS.find(s=>s.id===id);if(!slot)return;
 const before=clone(content.photos[id]),next=clone(draft||before);
