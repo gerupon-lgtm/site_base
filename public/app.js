@@ -1,9 +1,9 @@
 // © 2026 SIKUMI LAB — SITE BASE
-import {VERSION,PROFILES,clone,read,readAll,save,seed,stateOf,hasNew,publishedNews,displayDate,dateInput,preparePublication,badgeIds,badgeLabels,badgeLength,customBadgeText,WORK_KEY,publicPart,workChanged,readWork,saveWork,prepareWork} from './model.js?v=20261005-1';
-import {CONDITIONS, CONDITIONS_REVISION} from './conditions.js?v=20261005-1';
-import {newsList,newsDetailShell,bindNewsDetails,closeNewsDetail} from './news-details.js?v=20261005-1';
-import {PAGE_IMAGE_SLOTS,BADGE_OPTIONS,CUSTOM_BADGE_LIMIT} from './site-config.js?v=20261005-1';
-import {attachReorder} from './reorder.js?v=20261005-1';
+import {VERSION,PROFILES,clone,read,readAll,save,seed,stateOf,hasNew,publishedNews,displayDate,dateInput,preparePublication,badgeIds,badgeLabels,badgeLength,customBadgeText,WORK_KEY,publicPart,workChanged,readWork,saveWork,prepareWork} from './model.js?v=20261005-2';
+import {CONDITIONS, CONDITIONS_REVISION} from './conditions.js?v=20261005-2';
+import {newsList,newsDetailShell,bindNewsDetails,closeNewsDetail} from './news-details.js?v=20261005-2';
+import {PAGE_IMAGE_SLOTS,BADGE_OPTIONS,CUSTOM_BADGE_LIMIT} from './site-config.js?v=20261005-2';
+import {attachReorder} from './reorder.js?v=20261005-2';
 const profile=new URLSearchParams(location.search).get('profile');
 const selected=Object.hasOwn(PROFILES,profile)?profile:'shop';
 const page=document.body.dataset.page;
