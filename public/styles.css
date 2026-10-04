@@ -26,3 +26,12 @@ html{scrollbar-gutter:stable}.admin-brand{display:inline-flex;align-items:center
 .badge-choices .check{margin:8px 0}
 .badge-options input[name="customBadge"]{max-width:320px}
 .list-row .badge{margin:3px 3px 3px 0}
+
+/* Photos are optional; badges stay on the page background. */
+.item-card .item-badges{display:flex;flex-wrap:wrap;gap:6px;margin:-8px 0 18px}.item-card .item-badges:empty{display:none}.item-card h3{margin-bottom:18px}.list-row.no-photo{grid-template-columns:1fr auto}
+
+@media(max-width:700px){.list-row.no-photo{grid-template-columns:1fr}.list-row.no-photo .actions{grid-column:1}}
+
+.working-bar{position:sticky;top:var(--header-height,120px);z-index:15;padding:16px 20px;background:#f4f7ef;border:1px solid #b8c9b9;border-radius:5px;margin-bottom:28px;box-shadow:0 3px 12px #24352912}.working-bar p{margin:5px 0 12px}.working-bar .actions button{font-size:16px}.working-bar strong{font-size:18px}@media(max-width:700px){.working-bar{position:static;padding:15px}.working-bar .actions{display:grid;grid-template-columns:1fr}.working-bar .actions button{min-height:44px}}
+
+.hero.no-photo{grid-template-columns:1fr}.hero.no-photo>div{max-width:760px}

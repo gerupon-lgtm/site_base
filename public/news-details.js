@@ -36,7 +36,7 @@ export function bindNewsDetails(news,{esc,lines,imgSrc,badges,displayDate}) {
     if(!article)return;
     closeNewsDetail();activeTrigger=trigger;
     panel.querySelector('h2').textContent=article.name;
-    panel.querySelector('.news-detail-content').innerHTML=`<div class="news-detail-meta"><time>${displayDate(article.articleAt)}</time>${article.featured?'<span>ピックアップ</span>':''}${badges(article)}</div><img src="${imgSrc(article.image)}" alt="${esc(article.name)}"><p class="pre">${lines(article.body)}</p>`;
+    panel.querySelector('.news-detail-content').innerHTML=`<div class="news-detail-meta"><time>${displayDate(article.articleAt)}</time>${article.featured?'<span>ピックアップ</span>':''}${badges(article)}</div>${article.image?`<img src="${imgSrc(article.image)}" alt="${esc(article.name)}">`:""}<p class="pre">${lines(article.body)}</p>`;
     panel.hidden=false;trigger.setAttribute('aria-expanded','true');
     positionNewsDetail();panel.querySelector('.news-detail-close').focus({preventScroll:true});
   });

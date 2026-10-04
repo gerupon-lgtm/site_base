@@ -1,6 +1,6 @@
 // © 2026 SIKUMI LAB — SITE BASE
-export const VERSION = '20261004-16';
-import {PAGE_IMAGE_SLOTS,BADGE_OPTIONS,CUSTOM_BADGE_LIMIT} from './site-config.js?v=20261004-16';
+export const VERSION = '20261004-18';
+import {PAGE_IMAGE_SLOTS,BADGE_OPTIONS,CUSTOM_BADGE_LIMIT} from './site-config.js?v=20261004-18';
 export const PROFILES = { shop: '小さなお店', school: '教室', service: 'サービス業' };
 export const STORAGE_KEY = 'site-base-display-sample-v1';
 const day = 86400000;
@@ -28,7 +28,7 @@ function normalizeBadges(item) {
 }
 export function pagePhotos(saved={},legacyHero){
   return Object.fromEntries(PAGE_IMAGE_SLOTS.map(slot=>[slot.id,{
-    src:saved?.[slot.id]?.src||(slot.id==='hero'&&legacyHero)||slot.defaultSrc,
+    src:typeof saved?.[slot.id]?.src==='string'?saved[slot.id].src:(slot.id==='hero'&&legacyHero)||slot.defaultSrc,
     alt:typeof saved?.[slot.id]?.alt==='string'?saved[slot.id].alt:slot.defaultAlt,
   }]));
 }
@@ -84,4 +84,30 @@ export function preparePublication(before,draft,reapply,now) {
   if (!before?.firstPublishedAt) { next.firstPublishedAt=next.startAt; next.newStartedAt=next.startAt; }
   else {next.firstPublishedAt=before.firstPublishedAt;next.newStartedAt=reapply?Math.max(now,next.startAt):before.newStartedAt;}
   next.updatedAt=now; return next;
+}
+
+// Editing work is stored separately and is never read by the public renderer.
+export const WORK_KEY='site-base-display-work-v1';
+export const publicPart=c=>({shop:c.shop,photos:c.photos,items:c.items,news:c.news,days:c.days});
+export const workChanged=(base,draft)=>JSON.stringify(publicPart(base))!==JSON.stringify(publicPart(draft));
+export function readWork(profile){
+  try{const work=JSON.parse(localStorage.getItem(WORK_KEY)||'{}')[profile];return work?.base?.profile===profile&&work?.draft?.profile===profile&&Array.isArray(work.base.items)&&Array.isArray(work.draft.items)&&Array.isArray(work.draft.news)&&work.draft.photos&&work.draft.shop?clone(work):null;}catch{return null;}
+}
+export function saveWork(profile,work){
+  let all;try{all=JSON.parse(localStorage.getItem(WORK_KEY)||'{}');}catch{all={};}
+  if(!all||typeof all!=='object'||Array.isArray(all))all={};
+  if(work)all[profile]=work;else delete all[profile];
+  if(Object.keys(all).length)localStorage.setItem(WORK_KEY,JSON.stringify(all));else localStorage.removeItem(WORK_KEY);
+}
+export function prepareWork(base,draft,current,time){
+  if(workChanged(base,current))throw new Error('別の画面で公開内容が更新されています。作業内容は残しています。更新内容を確認してから編集をやり直してください。');
+  const next={...clone(current),...clone(publicPart(draft))};
+  for(const key of ['items','news'])next[key]=next[key].map(item=>{
+    const before=base[key].find(i=>i.id===item.id);
+    if(before&&JSON.stringify(before)===JSON.stringify(item))return clone(before);
+    const final=item.published?preparePublication(before,item,!!item.reapplyNew&&item.newEnabled,time):{...clone(item),updatedAt:time};
+    if(final.endAt&&final.endAt<=(final.startAt||time))throw new Error(`${item.name}：終了日時は公開日時より後にしてください。`);
+    delete final.reapplyNew;return final;
+  });
+  next.lastUpdated=time;return next;
 }
