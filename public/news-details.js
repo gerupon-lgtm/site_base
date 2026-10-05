@@ -13,20 +13,6 @@ export function closeNewsDetail(restoreFocus=false) {
   activeTrigger=null;
 }
 
-function positionNewsDetail() {
-  const panel=document.querySelector('#news-detail');
-  if(!activeTrigger||!panel||panel.hidden)return;
-  if(matchMedia('(max-width:700px)').matches){panel.style.removeProperty('left');panel.style.removeProperty('top');return;}
-  const rect=activeTrigger.getBoundingClientRect();
-  const headerBottom=document.querySelector('.site-header')?.getBoundingClientRect().bottom||0;
-  if(rect.bottom<=headerBottom||rect.top>=innerHeight){closeNewsDetail();return;}
-  const width=panel.offsetWidth,height=panel.offsetHeight,minTop=headerBottom+12;
-  const below=rect.bottom+12;
-  const top=below+height<=innerHeight-16?below:rect.top-height-12;
-  panel.style.left=`${Math.max(16,Math.min(rect.left,innerWidth-width-16))}px`;
-  panel.style.top=`${Math.max(minTop,Math.min(top,innerHeight-height-16))}px`;
-}
-
 export function bindNewsDetails(news,{esc,lines,imgSrc,badges,displayDate}) {
   const panel=document.querySelector('#news-detail');
   panel.querySelector('.news-detail-close').onclick=()=>closeNewsDetail(true);
@@ -38,7 +24,8 @@ export function bindNewsDetails(news,{esc,lines,imgSrc,badges,displayDate}) {
     panel.querySelector('h2').textContent=article.name;
     panel.querySelector('.news-detail-content').innerHTML=`<div class="news-detail-meta"><time>${displayDate(article.articleAt)}</time>${article.featured?'<span>ピックアップ</span>':''}${badges(article)}</div>${article.image?`<img src="${imgSrc(article.image)}" alt="${esc(article.name)}">`:""}<p class="pre">${lines(article.body)}</p>`;
     panel.hidden=false;trigger.setAttribute('aria-expanded','true');
-    positionNewsDetail();panel.querySelector('.news-detail-close').focus({preventScroll:true});
+    panel.querySelector('.news-detail-content').scrollTop=0;
+    panel.querySelector('.news-detail-close').focus({preventScroll:true});
   });
 }
 
@@ -51,5 +38,3 @@ document.addEventListener('keydown',event=>{
 document.addEventListener('focusin',event=>{
   if(activeTrigger&&!event.target.closest('#news-detail')&&!event.target.closest('[data-news]'))closeNewsDetail();
 });
-window.addEventListener('resize',positionNewsDetail);
-window.addEventListener('scroll',positionNewsDetail,true);

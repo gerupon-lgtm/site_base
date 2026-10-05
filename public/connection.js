@@ -1,5 +1,5 @@
 // © 2026 SIKUMI LAB — Shared storage adapter; no credentials in the browser.
-import {CONNECTED, API_ROOT} from './runtime.js?v=20261005-5';
+import {CONNECTED, API_ROOT} from './runtime.js?v=20261005-6';
 export {CONNECTED};
 let cache;
 const copy=value=>structuredClone(value);
