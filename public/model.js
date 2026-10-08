@@ -1,6 +1,6 @@
 // © 2026 SIKUMI LAB — SITE BASE
-export const VERSION = '20261009-1';
-import {PAGE_IMAGE_SLOTS,BADGE_OPTIONS,CUSTOM_BADGE_LIMIT} from './site-config.js?v=20261009-1';
+export const VERSION = '20261009-2';
+import {PAGE_IMAGE_SLOTS,BADGE_OPTIONS,CUSTOM_BADGE_LIMIT} from './site-config.js?v=20261009-2';
 export const PROFILES = { shop: '小さなお店', school: '教室', service: 'サービス業' };
 export const STORAGE_KEY = 'site-base-display-sample-v1';
 const day = 86400000;
@@ -44,8 +44,16 @@ export function stateOf(item, time) {
 export function hasNew(item, time, days) {
   return item.newEnabled && stateOf(item,time)==='公開中' && (item.newMode==='manual' || (item.newStartedAt && time>=item.newStartedAt && time < item.newStartedAt+days*day));
 }
+const pickupFirst=(a,b)=>Number(Boolean(b.featured))-Number(Boolean(a.featured));
+export function newsDateOrder(news) {
+  return news.slice().sort((a,b)=>pickupFirst(a,b)||b.articleAt-a.articleAt);
+}
+export function orderedNews(content) {
+  // Existing saved sites retain their date order until an explicit news edit.
+  return content.newsOrderMode==='manual'?content.news.slice().sort(pickupFirst):newsDateOrder(content.news);
+}
 export function publishedNews(content,time) {
-  return content.news.filter(n=>stateOf(n,time)==='公開中').sort((a,b)=>Number(b.featured)-Number(a.featured)||b.articleAt-a.articleAt).slice(0,10);
+  return orderedNews(content).filter(n=>stateOf(n,time)==='公開中').slice(0,10);
 }
 export function seed(profile='shop', now=Date.now()) {
   const themes = {
@@ -55,7 +63,7 @@ export function seed(profile='shop', now=Date.now()) {
   };
   const t=themes[profile];
   const common={published:true,hidden:false,startAt:now-day,endAt:null,firstPublishedAt:now-day,newStartedAt:now-day,newMode:'auto',newEnabled:true,updatedAt:now-day,badges:[],customBadge:'',customBadgeEnabled:false};
-  return { profile,photos:pagePhotos(),sampleNewsRevision:2,days:14,lastUpdated:now-day,shop:{...t,address:'三重県（住所はサンプルです）',hero:'./assets/atelier.svg'},items:t.names.map((name,i)=>({...common,id:`item-${i}`,name,price:t.prices[i],body:t.notes[i],image:`./assets/${i===1?'bowl':i===2?'vase':'cup'}.svg`,newEnabled:i!==2,newMode:i===1?'manual':'auto',badges:i===0?['recommended']:i===1?['limited-quantity']:[]})),news:[{...common,id:'news-0',name:'秋の暮らしを楽しむ、小さなご案内',body:'季節を楽しむひとときをご用意しました。\n詳しい内容は、お気軽にお問い合わせください。',kind:'お知らせ',articleAt:now-day,image:'./assets/atelier.svg',featured:true,price:''},{...common,id:'news-2',name:'今月の営業・受付時間について',body:'今月も通常の営業時間・受付時間でお待ちしています。\n臨時のお休みや時間の変更がある場合は、このお知らせでご案内します。',kind:'お知らせ',articleAt:now-2*day,image:'./assets/cup.svg',featured:false,price:''},{...common,id:'news-3',name:'季節のおすすめを追加しました',body:'暮らしを楽しむ、季節のおすすめを追加しました。\n掲載内容の一覧でご覧いただけます。気になるものがあれば、お気軽にお問い合わせください。',kind:'お知らせ',articleAt:now-3*day,image:'./assets/vase.svg',featured:false,price:''},{...common,id:'news-1',name:'来週から始まる期間限定のご案内',body:'公開予約の見本です。設定画面で表示確認時刻を進めると、ご案内が表示されます。',kind:'キャンペーン',badges:['limited-time','campaign'],articleAt:now+7*day,startAt:now+7*day,endAt:now+14*day,firstPublishedAt:now+7*day,newStartedAt:now+7*day,image:'./assets/vase.svg',featured:false,price:''}],inquiries:[{id:'inquiry-0',name:'デモのお問い合わせ',email:'sample@example.com',body:'掲載されている内容について、詳しく知りたいです。（架空の相談です）',receivedAt:now-day,status:'未対応',memo:'',notification:'メール通知の表示見本'}]};
+  return { profile,newsOrderMode:'manual',photos:pagePhotos(),sampleNewsRevision:2,days:14,lastUpdated:now-day,shop:{...t,address:'三重県（住所はサンプルです）',hero:'./assets/atelier.svg'},items:t.names.map((name,i)=>({...common,id:`item-${i}`,name,price:t.prices[i],body:t.notes[i],image:`./assets/${i===1?'bowl':i===2?'vase':'cup'}.svg`,newEnabled:i!==2,newMode:i===1?'manual':'auto',badges:i===0?['recommended']:i===1?['limited-quantity']:[]})),news:[{...common,id:'news-0',name:'秋の暮らしを楽しむ、小さなご案内',body:'季節を楽しむひとときをご用意しました。\n詳しい内容は、お気軽にお問い合わせください。',kind:'お知らせ',articleAt:now-day,image:'./assets/atelier.svg',featured:true,price:''},{...common,id:'news-2',name:'今月の営業・受付時間について',body:'今月も通常の営業時間・受付時間でお待ちしています。\n臨時のお休みや時間の変更がある場合は、このお知らせでご案内します。',kind:'お知らせ',articleAt:now-2*day,image:'./assets/cup.svg',featured:false,price:''},{...common,id:'news-3',name:'季節のおすすめを追加しました',body:'暮らしを楽しむ、季節のおすすめを追加しました。\n掲載内容の一覧でご覧いただけます。気になるものがあれば、お気軽にお問い合わせください。',kind:'お知らせ',articleAt:now-3*day,image:'./assets/vase.svg',featured:false,price:''},{...common,id:'news-1',name:'来週から始まる期間限定のご案内',body:'公開予約の見本です。設定画面で表示確認時刻を進めると、ご案内が表示されます。',kind:'キャンペーン',badges:['limited-time','campaign'],articleAt:now+7*day,startAt:now+7*day,endAt:now+14*day,firstPublishedAt:now+7*day,newStartedAt:now+7*day,image:'./assets/vase.svg',featured:false,price:''}],inquiries:[{id:'inquiry-0',name:'デモのお問い合わせ',email:'sample@example.com',body:'掲載されている内容について、詳しく知りたいです。（架空の相談です）',receivedAt:now-day,status:'未対応',memo:'',notification:'メール通知の表示見本'}]};
 }
 export function readAll() {
   try { const v=JSON.parse(localStorage.getItem(STORAGE_KEY)||'{}'); return v&&typeof v==='object'&&!Array.isArray(v)?v:{}; } catch { return {}; }
@@ -88,7 +96,7 @@ export function preparePublication(before,draft,reapply,now) {
 
 // Editing work is stored separately and is never read by the public renderer.
 export const WORK_KEY='site-base-display-work-v1';
-export const publicPart=c=>({shop:c.shop,photos:c.photos,items:c.items,news:c.news,days:c.days});
+export const publicPart=c=>({shop:c.shop,photos:c.photos,items:c.items,news:c.news,days:c.days,newsOrderMode:c.newsOrderMode??'date'});
 export const workChanged=(base,draft)=>JSON.stringify(publicPart(base))!==JSON.stringify(publicPart(draft));
 export function readWork(profile){
   try{const work=JSON.parse(localStorage.getItem(WORK_KEY)||'{}')[profile];return work?.base?.profile===profile&&work?.draft?.profile===profile&&Array.isArray(work.base.items)&&Array.isArray(work.draft.items)&&Array.isArray(work.draft.news)&&work.draft.photos&&work.draft.shop?clone(work):null;}catch{return null;}
