@@ -1,11 +1,11 @@
 // © 2026 SIKUMI LAB — SITE BASE
-import {VERSION,PROFILES,clone,read as readLocal,readAll,save,seed,stateOf,hasNew,publishedNews,displayDate,dateInput,preparePublication,badgeIds,badgeLabels,badgeLength,customBadgeText,WORK_KEY,publicPart,workChanged,readWork,saveWork,prepareWork} from './model.js?v=20261005-6';
-import {CONDITIONS, CONDITIONS_REVISION} from './conditions.js?v=20261005-6';
-import {newsList,newsDetailShell,bindNewsDetails,closeNewsDetail} from './news-details.js?v=20261005-6';
-import {itemCards,itemDetailShell,bindItemDetails,closeItemDetail} from './item-details.js?v=20261005-6';
-import {PAGE_IMAGE_SLOTS,BADGE_OPTIONS,CUSTOM_BADGE_LIMIT} from './site-config.js?v=20261005-6';
-import {attachReorder} from './reorder.js?v=20261005-6';
-import {CONNECTED,readShared,loadShared,publishShared,submitSharedInquiry,updateSharedInquiry,retrySharedInquiry,sharedHistory,retrySharedPublication} from './connection.js?v=20261005-6';
+import {VERSION,PROFILES,clone,read as readLocal,readAll,save,seed,stateOf,hasNew,publishedNews,displayDate,dateInput,preparePublication,badgeIds,badgeLabels,badgeLength,customBadgeText,WORK_KEY,publicPart,workChanged,readWork,saveWork,prepareWork} from './model.js?v=20261009-1';
+import {CONDITIONS, CONDITIONS_REVISION} from './conditions.js?v=20261009-1';
+import {newsList,newsDetailShell,bindNewsDetails,closeNewsDetail} from './news-details.js?v=20261009-1';
+import {itemCards,itemDetailShell,bindItemDetails,closeItemDetail} from './item-details.js?v=20261009-1';
+import {PAGE_IMAGE_SLOTS,BADGE_OPTIONS,CUSTOM_BADGE_LIMIT} from './site-config.js?v=20261009-1';
+import {attachReorder} from './reorder.js?v=20261009-1';
+import {CONNECTED,readShared,loadShared,publishShared,submitSharedInquiry,updateSharedInquiry,retrySharedInquiry,sharedHistory,retrySharedPublication} from './connection.js?v=20261009-1';
 const read=profile=>CONNECTED?(readShared()||seed(profile)):readLocal(profile);
 const profile=new URLSearchParams(location.search).get('profile');
 const selected=Object.hasOwn(PROFILES,profile)?profile:'shop';
